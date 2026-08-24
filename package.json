@@ -11,8 +11,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@actions/core": "^3.0.1",
-    "@actions/github": "^9.1.1",
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.1",
     "php-parser": "^3.7.0",
     "tree-sitter": "^0.25.1",
     "tree-sitter-javascript": "^0.25.0",
