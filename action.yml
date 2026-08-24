@@ -1,0 +1,15 @@
+name: 'N-Plus-One Guardian for Laravel'
+description: 'Analisa o código PHP em busca de problemas N+1 e más práticas do Eloquent/DB, alertando no Pull Request.'
+author: 'PDG-Team'
+branding:
+  icon: 'alert-triangle'
+  color: 'red'
+
+inputs:
+  github_token:
+    description: 'Token de autenticação do GitHub (normalmente ${{ secrets.GITHUB_TOKEN }})'
+    required: true
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
