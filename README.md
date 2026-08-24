@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Executar Guardião de N+1
-        uses: PDG-Team/n-plus-one-guardian@main # Atualize para apontar para a versão ou branch correta
+        uses: whentony/n-plus-one-guardian@main # Atualize para apontar para a versão ou branch correta
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
