@@ -1,5 +1,5 @@
 name: 'N-Plus-One Guardian'
-description: 'Analisa o código (PHP, TypeScript/Node, Python) em busca de problemas de N+1 queries no banco de dados, alertando no Pull Request.'
+description: 'Detecta problemas de N+1 queries em PHP, TypeScript e Python, comentando diretamente no Pull Request.'
 author: 'Whentony'
 branding:
   icon: 'alert-triangle'
