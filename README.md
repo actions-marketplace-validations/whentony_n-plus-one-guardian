@@ -6,18 +6,25 @@ Embora o projeto tenha "Laravel" no nome original, a action é poliglota e **atu
 
 ## 🚀 Como Funciona
 
-A Action varre apenas os arquivos modificados em cada Pull Request aberto ou atualizado. Se ela encontrar métodos comuns de consultas de ORMs sendo executados de dentro de loops (`for`, `foreach`, `while`), o guardião entra em ação e faz o seguinte:
+A Action varre apenas os arquivos modificados em cada Pull Request aberto ou atualizado. Ela utiliza a AST para analisar o código e atua em dois cenários principais de anti-patterns de banco de dados:
 
-1. **Comenta no Pull Request**: Cria um comentário de review inline exatamente na linha onde a infração foi detectada.
-2. **Bloqueia a Action**: Falha a execução do CI (com status de erro), sinalizando que o desenvolvedor precisa refatorar as queries e carregar os dados de forma antecipada (eager loading) fora do loop.
+1. **N+1 Universal**: Identifica métodos de consultas de banco de dados e ORMs sendo executados dentro de laços de repetição (`for`, `foreach`, `while`). Isso sinaliza que o desenvolvedor precisa carregar os dados de forma antecipada (eager loading) fora do loop.
+2. **Perda de Índice (Index Loss) por Cast**: Detecta o uso de funções de transformação em colunas dentro das consultas (como `whereDate()`, `Cast()`, ou *raw queries* com `CAST`). Essas funções impedem o banco de usar os índices da coluna, degradando a performance.
+
+Quando uma infração é detectada, o guardião entra em ação e:
+
+- **Comenta no Pull Request**: Cria um comentário de review inline (com nível *error*) exatamente na linha onde a infração (seja N+1 ou perda de índice) foi detectada.
+- **Bloqueia a Action**: Falha a execução do CI (com status de erro) ao detectar qualquer um desses cenários, barrando a inserção de graves problemas de performance na sua base de código.
 
 ## 📦 Linguagens e ORMs Suportados
 
 A ferramenta rastreia os métodos mais populares associados a bibliotecas de banco de dados nas seguintes linguagens:
 
-- **PHP** (Laravel Eloquent / Doctrine): `get`, `find`, `first`, `all`, `update`, `save`, `delete`, etc.
-- **TypeScript & JavaScript** (Prisma / TypeORM): `findMany`, `findUnique`, `findOne`, `query`, `execute`, etc.
-- **Python** (Django ORM / SQLAlchemy): `filter`, `exclude`.
+- **PHP** (Laravel Eloquent / Doctrine): `get`, `find`, `first`, `all`, `update`, `save`, `delete`, etc. Detecta cast em: `whereDate`, `whereYear`, `whereRaw`, etc.
+- **TypeScript & JavaScript** (Prisma / TypeORM / Knex / Sequelize): `findMany`, `findUnique`, `findOne`, `query`, `execute`, etc. Detecta cast em: `fn()`, `raw`, `$queryRaw`.
+- **Python** (Django ORM / SQLAlchemy): `filter`, `exclude`. Detecta cast em: `Cast`, `ExtractYear`, `TruncDate`, etc.
+
+> **Dica**: As verificações contam com checagem _case-insensitive_, identificando chamadas em caixa alta e baixa como `WHEREDATE`, `wheredate`, e _raw queries_ como `CAST(...)` ou `cast(...)`.
 
 ## 🛠 Como Usar (Instalação)
 
