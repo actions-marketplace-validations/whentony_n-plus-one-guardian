@@ -1,6 +1,6 @@
 {
   "name": "n-plus-one-guardian",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.js",
   "scripts": {
     "build": "ncc build src/index.ts -o dist --source-map --license licenses.txt",
@@ -8,6 +8,7 @@
   },
   "keywords": [],
   "author": "Whentony",
+  "contributors": ["caioandrade42"],
   "license": "ISC",
   "description": "GitHub Action poliglota para detectar N+1 em PHP, Node e Python",
   "dependencies": {

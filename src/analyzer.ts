@@ -42,6 +42,21 @@ const DB_METHODS = [
   'filter', 'exclude'
 ];
 
+const CAST_METHODS = [
+  // PHP/Laravel
+  'whereDate', 'whereMonth', 'whereYear', 'whereDay', 'whereTime',  
+  // Python (Django/SQLAlchemy)
+  '__date', '__year', '__month', '__day', '__week_day', '__time',
+  'Cast', 'Extract', 'ExtractYear', 'ExtractMonth', 'ExtractDay', 'TruncDate',
+  'cast', 'extract',  
+  // JS/TS (Prisma/TypeORM/Sequelize)
+  'fn' 
+];
+
+const DB_METHODS_LOWER = DB_METHODS.map(m => m.toLowerCase());
+const CAST_METHODS_LOWER = CAST_METHODS.map(m => m.toLowerCase());
+const RAW_METHODS_LOWER = ['whereraw', 'queryraw', '$queryraw', 'raw'];
+
 export function analyzePhpCode(filePath: string, code: string): Issue[] {
   // Mantemos o nome da função por compatibilidade, mas ela analisa qualquer código.
   const issues: Issue[] = [];
@@ -63,17 +78,44 @@ export function analyzePhpCode(filePath: string, code: string): Issue[] {
       const isLoopNode = node.type.includes('for') || node.type.includes('while');
       const currentInLoop = inLoop || isLoopNode;
 
-      // Se estivermos dentro de um loop, procuramos chamadas perigosas
-      if (currentInLoop && node.type.includes('call')) {
+      // Se for uma chamada de função/método, analisamos as regras
+      if (node.type.includes('call')) {
         // Encontra o identificador do método sendo chamado
         const methodNode = findMethodIdentifier(node);
-        if (methodNode && DB_METHODS.includes(methodNode.text)) {
-          issues.push({
-            file: filePath,
-            line: methodNode.startPosition.row + 1,
-            message: `🚨 [N+1 Universal Detectado]: O método de banco de dados \`${methodNode.text}()\` foi chamado dentro de um laço de repetição. Resolva a query fora do loop para evitar degradação de performance.`,
-            severity: 'error'
-          });
+        if (methodNode) {
+          const methodText = methodNode.text;
+          const methodLower = methodText.toLowerCase();
+
+          // Regra 1: N+1 (Somente dentro de loops)
+          const isDbMethod = DB_METHODS.includes(methodText) || (ext === '.php' && DB_METHODS_LOWER.includes(methodLower));
+          if (currentInLoop && isDbMethod) {
+            issues.push({
+              file: filePath,
+              line: methodNode.startPosition.row + 1,
+              message: `🚨 [N+1 Universal Detectado]: O método de banco de dados \`${methodText}()\` foi chamado dentro de um laço de repetição. Resolva a query fora do loop para evitar degradação de performance.`,
+              severity: 'error'
+            });
+          }
+          
+          // Regra 2: Perda de Índice por Cast
+          const isCastMethod = CAST_METHODS.includes(methodText) || CAST_METHODS_LOWER.includes(methodLower);
+          const isRawMethod = RAW_METHODS_LOWER.includes(methodLower);
+
+          if (isCastMethod) {
+            issues.push({
+              file: filePath,
+              line: methodNode.startPosition.row + 1,
+              message: `⚠️ [Perda de Índice Detectada]: O método \`${methodText}()\` aplica uma função na coluna, o que impede o banco de dados de usar índices. Considere fazer comparações de limite (>= e <=).`,
+              severity: 'error'
+            });
+          } else if (isRawMethod && (node.text.toUpperCase().includes('CAST(') || node.text.toUpperCase().includes('CAST '))) {
+            issues.push({
+              file: filePath,
+              line: methodNode.startPosition.row + 1,
+              message: `⚠️ [Perda de Índice Detectada]: Um cast manual foi detectado na query. Isso pode ignorar os índices e degradar a performance.`,
+              severity: 'error'
+            });
+          }
         }
       }
 
@@ -95,21 +137,34 @@ export function analyzePhpCode(filePath: string, code: string): Issue[] {
 
 // Tenta extrair o nome do método de dentro de uma chamada (ex: obj.metodo())
 function findMethodIdentifier(callNode: Parser.SyntaxNode): Parser.SyntaxNode | null {
+  // 1. Tenta usar os field names nativos do Tree-sitter ('name' ou 'function')
+  const fnNode = callNode.childForFieldName('name') || callNode.childForFieldName('function');
+  if (fnNode) {
+    if (fnNode.type === 'property_identifier' || fnNode.type === 'name' || fnNode.type === 'identifier') {
+      return fnNode;
+    }
+    const subProp = fnNode.childForFieldName('property') || fnNode.childForFieldName('attribute') || fnNode.childForFieldName('name');
+    if (subProp) return subProp;
+  }
+
+  // 2. Fallback navegando pelos nós
   for (let i = 0; i < callNode.childCount; i++) {
     const child = callNode.child(i);
     if (!child) continue;
 
-    // Em TS/JS: member_expression -> property_identifier
-    // Em PHP: member_call_expression -> name
     if (child.type.includes('member') || child.type.includes('attribute')) {
-      for (let j = 0; j < child.childCount; j++) {
+      const prop = child.childForFieldName('property') || child.childForFieldName('attribute') || child.childForFieldName('name');
+      if (prop) return prop;
+      for (let j = child.childCount - 1; j >= 0; j--) {
         const sub = child.child(j);
         if (sub && (sub.type === 'property_identifier' || sub.type === 'name' || sub.type === 'identifier')) {
           return sub;
         }
       }
     }
-    // Funções diretas ou outros formatos
+    if (callNode.type === 'scoped_call_expression' && child.type === 'name' && i > 0) {
+      return child;
+    }
     if (child.type === 'identifier' || child.type === 'name') {
       return child;
     }

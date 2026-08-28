@@ -56,4 +56,53 @@ for user in users:
     expect(issues.length).toBe(0);
   });
 
+
+  it('deve detectar perda de indice por uso de whereDate em PHP', () => {
+    const code = `
+      <?php
+      $users = User::whereDate('created_at', '2023-01-01')->get();
+    `;
+    const issues = analyzePhpCode('test.php', code);
+    
+    expect(issues.length).toBeGreaterThan(0);
+    const indexLossIssue = issues.find(i => i.message.includes('Perda de Índice Detectada') && i.message.includes('whereDate()'));
+    expect(indexLossIssue).toBeDefined();
+    expect(indexLossIssue?.severity).toBe('warning');
+  });
+
+  it('deve detectar perda de indice por uso de whereRaw com CAST em PHP', () => {
+    const code = `
+      <?php
+      $users = User::whereRaw('CAST(id AS CHAR) = "1"')->get();
+    `;
+    const issues = analyzePhpCode('test.php', code);
+    
+    expect(issues.length).toBeGreaterThan(0);
+    const indexLossIssue = issues.find(i => i.message.includes('Perda de Índice Detectada') && i.message.includes('cast manual'));
+    expect(indexLossIssue).toBeDefined();
+  });
+
+  it('deve detectar perda de indice por uso de Cast em Python', () => {
+    const code = `
+      users = User.objects.annotate(str_id=Cast('id', CharField())).filter(str_id="1")
+    `;
+    const issues = analyzePhpCode('test.py', code);
+    
+    expect(issues.length).toBeGreaterThan(0);
+    const indexLossIssue = issues.find(i => i.message.includes('Perda de Índice Detectada') && i.message.includes('Cast()'));
+    expect(indexLossIssue).toBeDefined();
+  });
+
+  it('deve detectar perda de indice em PHP de forma case-insensitive (WHEREDATE, whereyear)', () => {
+    const code = `
+      <?php
+      $orders1 = Order::WHEREDATE('created_at', '2023-10-25')->get();
+      $orders2 = Order::whereyear('created_at', '2023')->get();
+    `;
+    const issues = analyzePhpCode('test.php', code);
+    
+    expect(issues.length).toBe(2);
+    expect(issues[0].message).toContain('WHEREDATE()');
+    expect(issues[1].message).toContain('whereyear()');
+  });
 });
